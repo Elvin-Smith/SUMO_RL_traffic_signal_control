@@ -1,4 +1,4 @@
-
+from Utils.master_config import *
 from configs import EXP_CONFIGS
 import xml.etree.cElementTree as ET
 from xml.etree.ElementTree import dump
@@ -28,6 +28,8 @@ class Generate_Net():
     def __init__(self, configs):
         self.configs = configs
         self.file_name=self.configs['file_name']
+        self.sim_start = self.configs['sim_start']
+        self.max_steps = self.configs['max_steps']
         self.num_lanes = str(self.configs['num_lanes'])
         self.current_Env_path = os.path.dirname(os.path.abspath(__file__))
 
@@ -113,6 +115,7 @@ class Generate_Net():
                 file_name_str, file_name_str, file_name_str, file_name_str))
 
     def _generate_rou_xml(self):
+        # 生成车流
         self.flows = self.specify_flow()
         route_xml = ET.Element('routes')
         if len(self.vehicles) != 0:  # empty
@@ -125,7 +128,7 @@ class Generate_Net():
                 indent(route_xml, 1)
         dump(route_xml)
         tree = ET.ElementTree(route_xml)
-        tree.write(os.path.join(self.current_Env_path, self.file_name+'.rou.xml'), pretty_print=True,
+        tree.write(os.path.join(self.current_Env_path,'network', self.file_name+'.rou.xml'), pretty_print=True,
                    encoding='UTF-8', xml_declaration=True)
 
     def _generate_con_xml(self):
@@ -158,7 +161,6 @@ class Generate_Net():
                    encoding='UTF-8', xml_declaration=True)
         
 
-
     def generate_cfg(self, route_exist, mode='simulate'):
         '''
         if all the generation over, inherit this function by `super`.
@@ -166,22 +168,19 @@ class Generate_Net():
         sumocfg = ET.Element('configuration')
         inputXML = ET.SubElement(sumocfg, 'input')
         inputXML.append(
-            E('net-file', attrib={'value': os.path.join(self.current_Env_path, self.file_name+'.net.xml')}))
+            E('net-file', attrib={'value': os.path.join(self.current_Env_path,'network', self.file_name+'.net.xml')}))
         indent(sumocfg)
         if route_exist == True:
-            if self.configs['network'] == 'grid':  # grid에서만 생성
-                self._generate_rou_xml()
-            if os.path.exists(os.path.join(self.current_Env_path, self.file_name+'.rou.xml')):
+            if os.path.exists(os.path.join(self.current_Env_path,'network', self.file_name+'.rou.xml')):
                 inputXML.append(
-                    E('route-files', attrib={'value': os.path.join(self.current_Env_path, self.file_name+'.rou.xml')}))
+                    E('route-files', attrib={'value': os.path.join(self.current_Env_path,'network', self.file_name+'.rou.xml')}))
                 indent(sumocfg)
 
         # if os.path.exists(os.path.join(self.current_Env_path, self.file_name+'_data.add.xml')):
         #     inputXML.append(
         #         E('additional-files', attrib={'value': os.path.join(self.current_Env_path, self.file_name+'_data.add.xml')}))
         #     indent(sumocfg)
-        inputXML.append(E('additional-files', attrib={'value': os.path.join(self.current_Env_path, self.file_name+'_data.add.xml')}))
-        indent(sumocfg)
+        
 
         time = ET.SubElement(sumocfg, 'time')
         time.append(E('begin', attrib={'value': str(self.sim_start)}))
@@ -193,25 +192,25 @@ class Generate_Net():
         dump(sumocfg)
         tree = ET.ElementTree(sumocfg)
         if mode == 'simulate':
-            tree.write(os.path.join(self.current_Env_path, self.file_name+'_simulate.sumocfg'),
+            tree.write(os.path.join(self.current_Env_path,'network', self.file_name+'.sumocfg'),
                        pretty_print=True, encoding='UTF-8', xml_declaration=True)
         elif mode == 'test':
-            tree.write(os.path.join(self.current_Env_path, self.file_name+'_test.sumocfg'),
+            tree.write(os.path.join(self.current_Env_path,'network', self.file_name+'_test.sumocfg'),
                        pretty_print=True, encoding='UTF-8', xml_declaration=True)
         elif mode == 'train' or mode == 'train_old':
-            tree.write(os.path.join(self.current_Env_path, self.file_name+'_train.sumocfg'),
+            tree.write(os.path.join(self.current_Env_path,'network', self.file_name+'_train.sumocfg'),
                        pretty_print=True, encoding='UTF-8', xml_declaration=True)
 
     def test_net(self):
         self.generate_cfg(False)
 
-        os.system('sumo-gui -c {}.sumocfg'.format(os.path.join(self.current_Env_path,
-                                                               self.file_name+'_simulate')))
+        os.system('sumo-gui -c {}.sumocfg'.format(os.path.join(self.current_Env_path,'network',
+                                                               self.file_name)))
 
     def sumo_gui(self):
         self.generate_cfg(True)
         os.system('sumo-gui -c {}.sumocfg'.format(
-            os.path.join(self.current_Env_path, self.file_name+'_simulate')))
+            os.path.join(self.current_Env_path,'network', self.file_name)))
 
     def generate_all_xml(self):
         self._generate_nod_xml()
@@ -219,6 +218,96 @@ class Generate_Net():
         self._generate_tll_xml()
         self._generate_net_xml()
         self._generate_rou_xml()
+
+        self.get_configs()
+
+    def generate_and_sim_gui(self):
+        self.generate_all_xml()
+        self.sumo_gui()
+
+    def get_configs(self):
+        side_list = ['u', 'r', 'd', 'l']
+        NET_CONFIGS = dict()
+        interest_list = list()
+        interests = list()
+        interest_set = list()
+        node_list = self.configs['node_info']
+        # grid에서는 자동 생성기 따라서 사용해도 무방함 #map완성되면 통일 가능
+        x_y_end = self.configs['grid_num']-1
+        for _, node in enumerate(node_list):
+            if node['id'][-1] not in side_list:
+                x = int(node['id'][-3])
+                y = int(node['id'][-1])
+                left_x = x-1
+                left_y = y
+                right_x = x+1
+                right_y = y
+                down_x = x
+                down_y = y+1  # 아래로가면 y는 숫자가 늘어남
+                up_x = x
+                up_y = y-1  # 위로가면 y는 숫자가 줄어듦
+
+                if x == 0:
+                    left_y = 'l'
+                    left_x = y
+                if y == 0:
+                    up_y = 'u'
+                if x == x_y_end:
+                    right_y = 'r'
+                    right_x = y
+                if y == x_y_end:
+                    down_y = 'd'
+                # up
+                interests.append(
+                    {
+                        'id': 'u_{}'.format(node['id'][2:]),
+                        'inflow': 'n_{}_{}_to_n_{}_{}'.format(up_x, up_y, x, y),
+                        'outflow': 'n_{}_{}_to_n_{}_{}'.format(x, y, up_x, up_y),
+                    }
+                )
+                # right
+                interests.append(
+                    {
+                        'id': 'r_{}'.format(node['id'][2:]),
+                        'inflow': 'n_{}_{}_to_n_{}_{}'.format(right_x, right_y, x, y),
+                        'outflow': 'n_{}_{}_to_n_{}_{}'.format(x, y, right_x, right_y),
+                    }
+                )
+                # down
+                interests.append(
+                    {
+                        'id': 'd_{}'.format(node['id'][2:]),
+                        'inflow': 'n_{}_{}_to_n_{}_{}'.format(down_x, down_y, x, y),
+                        'outflow': 'n_{}_{}_to_n_{}_{}'.format(x, y, down_x, down_y),
+                    }
+                )
+                # left
+                interests.append(
+                    {
+                        'id': 'l_{}'.format(node['id'][2:]),
+                        'inflow': 'n_{}_{}_to_n_{}_{}'.format(left_x, left_y, x, y),
+                        'outflow': 'n_{}_{}_to_n_{}_{}'.format(x, y, left_x, left_y),
+                    }
+                )
+                interest_list.append(interests)
+                interest_set += list(interests)
+        no_dup_interest_list=list()
+        no_dup_interest_set=list()
+        for interest_set_item in interest_set:
+            if interest_set_item not in no_dup_interest_set:
+                no_dup_interest_set.append(interest_set_item)
+        no_dup_interest_list=list()
+        for interest_list_item in interest_list:
+            if interest_list_item not in no_dup_interest_list:
+                no_dup_interest_list.append(interest_list_item)
+
+        NET_CONFIGS['interest_list'] = no_dup_interest_list
+        print(no_dup_interest_list)
+        NET_CONFIGS['max_steps']=self.max_steps
+        ini_path=os.path.join(self.current_Env_path,'network', self.file_name+'.ini')
+        write_config(ini_path, NET_CONFIGS)
+        
+        return NET_CONFIGS
 
 class Grid_Net(Generate_Net):
     def __init__(self,grid_num,configs):
@@ -468,15 +557,65 @@ class Grid_Net(Generate_Net):
         #     'phase': rl_phase_set,
         # })
         return traffic_lights
+    
+    def specify_flow(self):
+        flows = list()
+        direction_list = ['l', 'u', 'd', 'r']
 
+        for _, edge in enumerate(self.edges):
+            for i, _ in enumerate(direction_list):
+                if direction_list[i] in edge['from']:
+                    for _, checkEdge in enumerate(self.edges):
+                        #检测两端都是外部的边角才会生成车流
+                        if edge['from'][-3] == checkEdge['to'][-3] and checkEdge['to'][-1] == direction_list[3-i] and direction_list[i] in edge['from']:
+
+                            # 위 아래
+                            if checkEdge['to'][-1] == direction_list[1] or checkEdge['to'][-1] == direction_list[2]:
+                                self.configs['probability'] = '0.133'
+                                self.configs['vehsPerHour'] = '900'
+                            else:
+                                self.configs['vehsPerHour'] = '1600'
+                                self.configs['probability'] = '0.388'
+                            via_string = str()
+                            node_x_y = edge['id'][2]  # 끝에서 사용하는 기준 x나 y
+                            if 'r' in edge['id']:
+                                for i in range(self.configs['grid_num']-1, 0, -1):
+                                    via_string += 'n_{}_{}_to_n_{}_{} '.format(
+                                        i, node_x_y, i-1, node_x_y)
+                            elif 'l' in edge['id']:
+                                for i in range(self.configs['grid_num']-2):
+                                    via_string += 'n_{}_{}_to_n_{}_{} '.format(
+                                        i, node_x_y, i+1, node_x_y)
+                            elif 'u' in edge['id']:
+                                for i in range(self.configs['grid_num']-2):
+                                    via_string += 'n_{}_{}_to_n_{}_{} '.format(
+                                        node_x_y, i, node_x_y, i+1)
+                            elif 'd' in edge['id']:
+                                for i in range(self.configs['grid_num']-1, 0, -1):
+                                    via_string += 'n_{}_{}_to_n_{}_{} '.format(
+                                        node_x_y, i, node_x_y, i-1)
+
+                            flows.append({
+                                'from': edge['id'],
+                                'to': checkEdge['id'],
+                                'id': edge['from'],
+                                'begin': str(self.configs['flow_start']),
+                                'end': str(self.configs['flow_end']),
+                                'probability': self.configs['probability'],
+                                # 'vehsPerHour': self.configs['vehsPerHour'],
+                                'reroute': 'false',
+                                # 'via': edge['id']+" "+via_string+" "+checkEdge['id'],
+                                'departPos': "base",
+                                'departLane': 'best',
+                            })
+
+        self.flows = flows
+        self.configs['vehicle_info'] = flows
+        return flows
 if __name__ == "__main__":
     grid_num=5
     configs = EXP_CONFIGS
     configs['grid_num'] = grid_num
     grid=Grid_Net(grid_num,configs)
-    grid._generate_nod_xml()
-    grid._generate_edg_xml()
-    grid._generate_tll_xml()
-    grid._generate_net_xml()
-    
+    grid.generate_and_sim_gui()
 
