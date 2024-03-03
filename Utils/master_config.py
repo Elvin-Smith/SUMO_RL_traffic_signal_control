@@ -3,34 +3,31 @@ import sys
 import os
 sys.path.append(os.getcwd())
 from configs import EXP_CONFIGS
+import json
+
+def write_list_to_json(file_path, data_list):
+    with open(file_path, 'w') as json_file:
+        json.dump(data_list, json_file)
+
+def read_list_from_json(file_path):
+    with open(file_path, 'r') as json_file:
+        data_list = json.load(json_file)
+    return data_list
 
 
-def write_config(filename, config_data):
-    config = configparser.ConfigParser()
 
-    for key, value in config_data.items():
-        config['DEFAULT'][key] = str(value)
-
-    with open(filename, 'w') as configfile:
-        config.write(configfile)
-
-def read_config(filename):
-    config = configparser.ConfigParser()
-    config.read(filename)
-
-    config_data = {}
-    for key, value in config['DEFAULT'].items():
-        config_data[key] = value
-
-    return config_data
 
 
 
 
 if __name__ == "__main__":
-    # 将 EXP_CONFIGS 写入配置文件
-    write_config('config.ini', EXP_CONFIGS)
+    # 示例用法
+    my_list = [1, 2, 3, 'abc', {'key': 'value'}]
 
-    # 从配置文件中读取配置
-    loaded_config = read_config('config.ini')
-    print(loaded_config)
+    # 写入列表到JSON文件
+    write_list_to_json('my_list.json', my_list)
+
+    # 从JSON文件中读取列表
+    loaded_list = read_list_from_json('my_list.json')
+
+    print(loaded_list)
