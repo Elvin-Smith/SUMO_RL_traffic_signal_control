@@ -18,8 +18,8 @@ from Utils.master_config import *
 
 def Baseline(sumoConfig):
 
-    print(find_ini_file(sumoConfig))
-    NET_CONFIGS=read_config(find_ini_file(sumoConfig))
+    print(find_json_file(sumoConfig))
+    NET_CONFIGS=read_list_from_json(find_json_file(sumoConfig))
 
     sumoBinary = checkBinary('sumo')
     sumoCmd = [sumoBinary, "-c", sumoConfig]
@@ -30,4 +30,4 @@ def Baseline(sumoConfig):
 
 
 if __name__ == "__main__":
-    Baseline(r'E:\code\mycode\network\5x5grid.sumocfg')
+    Baseline(r'J:\code\mycode\network\5x5grid.sumocfg')

@@ -4,6 +4,7 @@ import xml.etree.cElementTree as ET
 from xml.etree.ElementTree import dump
 from lxml import etree as ET
 import os
+import random
 E = ET.Element
 
 #为XML文件添加合适的缩进
@@ -116,7 +117,8 @@ class Generate_Net():
 
     def _generate_rou_xml(self):
         # 生成车流
-        self.flows = self.specify_flow()
+        #self.flows = self.specify_flow()
+        self.random_specify_flow()
         route_xml = ET.Element('routes')
         if len(self.vehicles) != 0:  # empty
             for _, vehicle_dict in enumerate(self.vehicles):
@@ -304,8 +306,8 @@ class Generate_Net():
         NET_CONFIGS['interest_list'] = no_dup_interest_list
         print(no_dup_interest_list)
         NET_CONFIGS['max_steps']=self.max_steps
-        ini_path=os.path.join(self.current_Env_path,'network', self.file_name+'.ini')
-        write_config(ini_path, NET_CONFIGS)
+        ini_path=os.path.join(self.current_Env_path,'network', self.file_name+'.json')
+        write_list_to_json(ini_path, NET_CONFIGS)
         
         return NET_CONFIGS
 
@@ -558,9 +560,41 @@ class Grid_Net(Generate_Net):
         # })
         return traffic_lights
     
+
+
+    def random_specify_flow(self):
+        flows = list()
+        direction_list = ['l', 'u', 'd', 'r']
+        for _, edge in enumerate(self.edges):
+            for i, _ in enumerate(direction_list):
+                #检测到来源是外部道路
+                if direction_list[i] in edge['from']:
+                    #随机抽取出端点
+                    random_edge=self.random_element_except(self.edges,edge['id'],direction_list)
+                    print(random_edge)
+                    self.configs['probability']=str(round(random.uniform(0.1, 0.4), 3))
+                    self.configs['vehsPerHour']=str(random.randint(9, 16)*100)   
+                    flows.append({
+                                'from': edge['id'],
+                                'to': random_edge['id'],
+                                'id': edge['from'],
+                                'begin': str(self.configs['flow_start']),
+                                'end': str(self.configs['flow_end']),
+                                'probability': self.configs['probability'],
+                                # 'vehsPerHour': self.configs['vehsPerHour'],
+                                'reroute': 'false',
+                                # 'via': edge['id']+" "+via_string+" "+checkEdge['id'],
+                                'departPos': "base",
+                                'departLane': 'best',
+                            }) 
+        self.flows = flows
+        self.configs['vehicle_info'] = flows
+        return flows
+
     def specify_flow(self):
         flows = list()
         direction_list = ['l', 'u', 'd', 'r']
+        
 
         for _, edge in enumerate(self.edges):
             for i, _ in enumerate(direction_list):
@@ -569,7 +603,7 @@ class Grid_Net(Generate_Net):
                         #检测两端都是外部的边角才会生成车流
                         if edge['from'][-3] == checkEdge['to'][-3] and checkEdge['to'][-1] == direction_list[3-i] and direction_list[i] in edge['from']:
 
-                            # 위 아래
+                            
                             if checkEdge['to'][-1] == direction_list[1] or checkEdge['to'][-1] == direction_list[2]:
                                 self.configs['probability'] = '0.133'
                                 self.configs['vehsPerHour'] = '900'
@@ -612,6 +646,25 @@ class Grid_Net(Generate_Net):
         self.flows = flows
         self.configs['vehicle_info'] = flows
         return flows
+    
+    def random_element_except(self,edge_list, element,direction_list):
+        list_keys=list()
+        # 获取字典中除了指定元素外的所有键
+        for i, checkEdge in enumerate(edge_list):
+            if checkEdge['id'] != element:
+                list_keys.append(i)
+        
+        flag=True
+        # 确保选择的元素包含在direction_list中
+        while flag==True:
+            # 随机选择一个键
+            random_key = random.choice(list_keys)
+            for i, _ in enumerate(direction_list):
+                if direction_list[i] in edge_list[random_key]['to']:
+                    flag= False                   
+            
+                
+        return edge_list[random_key]
 if __name__ == "__main__":
     grid_num=5
     configs = EXP_CONFIGS
